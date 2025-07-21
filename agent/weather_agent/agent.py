@@ -1,28 +1,33 @@
-from google.adk.agents import LlmAgent
 from google.adk.tools.mcp_tool import MCPToolset
 from google.adk.tools.mcp_tool.mcp_session_manager import SseServerParams
+from google.adk.agents import Agent
 
-
-async def get_tools_async():
-    tools, exit_stack = await MCPToolset.from_server(
-        connection_params=SseServerParams(
-            url="http://localhost:8000/sse"
-        )
+mcp_toolset = MCPToolset(
+    connection_params=SseServerParams(
+        url="http://localhost:8000/sse"
     )
-    # Keep exit_stack open for the lifetime of the container.
-    return tools, exit_stack
+)
 
-async def create_agent():
-  """Gets tools from MCP Server."""
-  tools, exit_stack = await get_tools_async()
+root_agent = Agent(
+    name="weather_agent",
+    model="gemini-2.0-flash",
+    description=(
+        "Agent to answer questions about weather."
+    ),
+    instruction="""
+        You are a helpful weather assistant that can provide weather information and alerts.
+        You have access to the following tools:
+        - get_weather_alerts: Get weather alerts for a US state using the two-letter state code (e.g. CA, NY)
+        - get_weather_forecast: Get weather forecast for a location using latitude and longitude coordinates
 
-  agent = LlmAgent(
-      model='gemini-2.0-flash', # Adjust model name if needed based on availability
-      name='filesystem_assistant',
-      instruction='Help user interact with the local filesystem using available tools.',
-      tools=tools, # Provide the MCP tools to the ADK agent
-  )
-  return agent, exit_stack
+        When users ask about weather:
+        1. For weather alerts, ask for the state if not provided, then use get_weather_alerts
+        2. For weather forecasts, ask for the location coordinates if not provided, then use get_weather_forecast
+        3. Provide clear, helpful responses based on the weather data you retrieve
 
+        If users ask about non-weather topics, politely explain that you are specialized in weather information.
 
-root_agent = create_agent()
+        Always be helpful and provide clear, accurate weather information based on the tools available to you.
+        """,
+    tools=[mcp_toolset],
+)
